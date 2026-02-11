@@ -1,0 +1,60 @@
+# TSO-aligned wind forecasting configuration
+# Regions selected for transmission grid relevance
+
+timezone: Europe/Berlin
+
+# Historical data period for training
+date_start: "2022-01-01"  # Recent 3 years (instead of 5) - faster training
+date_end: "2024-12-31"
+
+# Strategic German regions for TSO operations
+locations:
+  - name: Schleswig-Holstein  # High wind penetration, coastal, North Sea
+    lat: 54.4739
+    lon: 9.5733
+    description: "Coastal region with high offshore wind feed-in"
+  
+  - name: Lower Saxony  # Major onshore wind capacity
+    lat: 52.6367
+    lon: 9.8451
+    description: "Major onshore wind generation region"
+  
+  - name: Brandenburg  # Growing wind capacity, eastern grid
+    lat: 52.4125
+    lon: 12.5316
+    description: "Eastern transmission zone with expanding wind capacity"
+  
+  - name: Bavaria  # Lower wind, southern contrast region
+    lat: 49.4521
+    lon: 11.0767
+    description: "Southern region with lower wind, grid balancing contrast"
+
+# Features available from reanalysis/meteorological measurements
+features:
+  - wind_speed_10m
+  - wind_direction_10m
+  - pressure_msl
+  - temperature_2m
+  - relative_humidity_2m
+
+# LSTM model configuration
+model:
+  lookback_hours: 96      # Increased from 72 for more temporal context
+  forecast_hours: 24      # Next 24 hours prediction
+  hidden_units: 256       # Increased from 96 - model needs more capacity
+  num_layers: 3           # Increased from 2 - deeper network for complex patterns
+  dropout: 0.3            # Increased from 0.25 for better regularization
+  l2_regularization: 0.001  # Weight decay for preventing overfitting (0.001-0.01 recommended)
+  learning_rate: 0.001    # Standard Adam learning rate
+  batch_size: 64          # Smaller batches = more gradient updates = better learning
+  epochs: 100             # Sufficient epochs (early stopping will prevent overfitting)
+
+# Wind-to-power conversion
+power_curve:
+  cut_in_speed: 3.0       # m/s
+  rated_speed: 12.0       # m/s
+  cut_out_speed: 25.0     # m/s
+  rated_power: 1.0        # normalized
+
+# Data source
+data_source: "open-meteo"  # Free historical weather API

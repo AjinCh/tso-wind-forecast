@@ -1,0 +1,74 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files (too large for git)
+data/
+!data/.gitkeep
+
+# Model files (too large for git)
+models/
+!models/.gitkeep
+
+# Results
+results/
+!results/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# TensorFlow
+*.h5
+*.pb
+checkpoint
+*.ckpt*
+
+# n8n (automation)
+.env
+.n8n/
+n8n_data/
+
+# API
+__pycache__/
+*.pyc

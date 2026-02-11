@@ -1,0 +1,318 @@
+{
+  "name": "Wind Forecast Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/forecast",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "location",
+              "value": "Schleswig-Holstein"
+            },
+            {
+              "name": "hours_ahead",
+              "value": "24"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "get-forecast",
+      "name": "Get Wind Forecast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const forecast = $input.first().json;\n\n// Extract key metrics\nconst predictions = forecast.predictions || [];\nconst avgSpeed = predictions.reduce((sum, p) => sum + p.wind_speed_ms, 0) / predictions.length;\nconst maxSpeed = Math.max(...predictions.map(p => p.wind_speed_ms));\nconst minSpeed = Math.min(...predictions.map(p => p.wind_speed_ms));\n\n// Check for alerts\nconst highWindHours = predictions.filter(p => p.wind_speed_ms > 12).length;\nconst galeHours = predictions.filter(p => p.category === 'Gale').length;\n\n// Calculate rapid changes\nlet maxChange = 0;\nfor (let i = 1; i < predictions.length; i++) {\n  const change = Math.abs(predictions[i].wind_speed_ms - predictions[i-1].wind_speed_ms);\n  if (change > maxChange) maxChange = change;\n}\n\nconst hasHighWindAlert = highWindHours > 6;\nconst hasGaleAlert = galeHours > 0;\nconst hasRapidChange = maxChange > 3;\n\nreturn {\n  json: {\n    timestamp: forecast.generated_at,\n    location: forecast.location,\n    forecast_start: predictions[0]?.timestamp,\n    forecast_end: predictions[predictions.length - 1]?.timestamp,\n    metrics: {\n      avg_wind_speed: Math.round(avgSpeed * 100) / 100,\n      max_wind_speed: Math.round(maxSpeed * 100) / 100,\n      min_wind_speed: Math.round(minSpeed * 100) / 100,\n      high_wind_hours: highWindHours,\n      gale_hours: galeHours,\n      max_hourly_change: Math.round(maxChange * 100) / 100\n    },\n    alerts: {\n      high_wind: hasHighWindAlert,\n      gale_conditions: hasGaleAlert,\n      rapid_change: hasRapidChange\n    },\n    alert_level: hasGaleAlert ? 'HIGH' : (hasHighWindAlert || hasRapidChange) ? 'MEDIUM' : 'LOW',\n    predictions: predictions\n  }\n};"
+      },
+      "id": "process-data",
+      "name": "Process Forecast Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.alert_level }}",
+              "operation": "notEquals",
+              "value2": "LOW"
+            }
+          ]
+        }
+      },
+      "id": "check-alerts",
+      "name": "Alert Needed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "forecasts",
+        "columns": "timestamp, location, avg_wind_speed, max_wind_speed, min_wind_speed, high_wind_hours, gale_hours, alert_level",
+        "additionalFields": {}
+      },
+      "id": "save-to-db",
+      "name": "Save to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        900,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Wind Forecast DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🌬️ **Wind Forecast Alert - {{ $json.alert_level }}**\n\n📍 Location: {{ $json.location }}\n⏰ Generated: {{ $json.timestamp }}\n\n**Forecast Summary (Next 24h):**\n• Average Wind: {{ $json.metrics.avg_wind_speed }} m/s\n• Maximum Wind: {{ $json.metrics.max_wind_speed }} m/s\n• Minimum Wind: {{ $json.metrics.min_wind_speed }} m/s\n• High Wind Hours: {{ $json.metrics.high_wind_hours }}\n• Gale Force Hours: {{ $json.metrics.gale_hours }}\n• Max Hourly Change: {{ $json.metrics.max_hourly_change }} m/s\n\n**Alerts:**\n{% if $json.alerts.gale_conditions %}⚠️ Gale force winds expected\n{% endif %}{% if $json.alerts.high_wind %}⚠️ Extended high wind period\n{% endif %}{% if $json.alerts.rapid_change %}⚠️ Rapid wind speed changes expected\n{% endif %}\n\n🔗 Dashboard: http://localhost:8000/docs",
+        "options": {}
+      },
+      "id": "format-alert",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"text\": \"{{ $json.content }}\",\n  \"username\": \"Wind Forecast Bot\",\n  \"icon_emoji\": \":dash:\"\n}",
+        "options": {}
+      },
+      "id": "send-slack",
+      "name": "Send to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"https://schema.org/extensions\",\n  \"summary\": \"Wind Forecast Alert\",\n  \"themeColor\": \"{{ $json.alert_level === 'HIGH' ? 'FF0000' : 'FFA500' }}\",\n  \"title\": \"🌬️ Wind Forecast Alert - {{ $json.alert_level }}\",\n  \"text\": \"{{ $json.content }}\"\n}",
+        "options": {}
+      },
+      "id": "send-teams",
+      "name": "Send to MS Teams",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_USER }}",
+        "toEmail": "operations@tennet.com",
+        "subject": "Wind Forecast Alert - {{ $json.alert_level }}",
+        "text": "={{ $json.content }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        500
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "2",
+          "name": "Email Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook-forecast",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        500
+      ],
+      "webhookId": "wind-forecast-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Forecast processed\", \"alert_level\": \"{{ $json.alert_level }}\" }",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Get Wind Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Wind Forecast": {
+      "main": [
+        [
+          {
+            "node": "Process Forecast Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Forecast Data": {
+      "main": [
+        [
+          {
+            "node": "Alert Needed?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Needed?": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send to MS Teams",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Wind Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2026-02-11T23:38:00.000Z",
+  "versionId": "1"
+}
