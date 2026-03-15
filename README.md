@@ -249,29 +249,6 @@ Access n8n at **http://localhost:5678** (admin/changeme123)
 
 ---
 
-## 🎓 Interview Talking Points
-
-### "Why this project?"
-
-> *"I realized how central short-term wind uncertainty is for TSO grid balancing operations. I wanted to build a realistic prototype that mirrors the forecasting support tools TSOs rely on, focusing on hourly operational horizons rather than generic weather prediction."*
-
-### "Why LSTM?"
-
-> *"The goal was a transparent temporal model that captures autocorrelation and regime changes in wind behavior. LSTMs handle this well for short horizons without requiring the complexity of transformer architectures or ensemble systems."*
-
-### "How would this be used?"
-
-> *"As a decision-support input alongside existing forecast systems, particularly to assess uncertainty during high-wind periods. The error growth analysis helps size balancing reserves, and the power curve extension shows how wind uncertainty amplifies to feed-in uncertainty."*
-
-### "What would you improve?"
-
-> *"For production, I'd add:*
-- *Probabilistic forecasting (quantile regression or bayesian layers)*
-- *Separate regional models vs. unified Germany model*
-- *Integration with numerical weather prediction (NWP) outputs*
-- *Real-time updating as new observations arrive"*
-
----
 
 ## 🔄 Potential Extensions
 
